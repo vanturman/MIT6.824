@@ -21,7 +21,7 @@ func mapF(document string, value string) (res []mapreduce.KeyValue) {
 	})
 
 	// store kv pairs into KeyValue type array
-	for _, v := range(result) {
+	for _, v := range result {
 		res = append(res, mapreduce.KeyValue{Key: v, Value: document})
 	}
 	return res
@@ -33,7 +33,7 @@ func mapF(document string, value string) (res []mapreduce.KeyValue) {
 func reduceF(key string, values []string) string {
 	// Your code here (Part V).
 	res := strconv.Itoa(len(values)) + " "
-	for _, v := range(values) {
+	for _, v := range values {
 		res += v + ","
 	}
 	return res[:len(res) - 1]
