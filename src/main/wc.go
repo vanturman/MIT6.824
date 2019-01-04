@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"mapreduce"
 	"os"
+	"strings"
+	"unicode"
+	"strconv"
 )
 
 //
@@ -15,6 +18,20 @@ import (
 //
 func mapF(filename string, contents string) []mapreduce.KeyValue {
 	// Your code here (Part II).
+	
+	res := make([]mapreduce.KeyValue, 0)
+	// delimeter function: ingore letters and numbers
+	f := func(c rune) bool {
+		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
+	}
+
+	// split words
+	words := strings.FieldsFunc(contents, f)
+	for _, w := range  words {
+		kv := mapreduce.KeyValue {w, ""}
+		res = append(res, kv)
+	}
+	return res
 }
 
 //
@@ -24,6 +41,8 @@ func mapF(filename string, contents string) []mapreduce.KeyValue {
 //
 func reduceF(key string, values []string) string {
 	// Your code here (Part II).
+	// count values numbers
+	return strconv.Itoa(len(values))
 }
 
 // Can be run in 3 ways:
