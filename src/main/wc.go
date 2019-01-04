@@ -19,8 +19,9 @@ import (
 func mapF(filename string, contents string) []mapreduce.KeyValue {
 	// Your code here (Part II).
 	
-	res := make([]mapreduce.KeyValue, 0)
 	// delimeter function: ingore letters and numbers
+	// store kv pairs into KeyValue array
+	res := make([]mapreduce.KeyValue, 0)
 	f := func(c rune) bool {
 		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
 	}
