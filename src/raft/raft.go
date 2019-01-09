@@ -23,7 +23,11 @@ import "labrpc"
 // import "bytes"
 // import "labgob"
 
-
+const(
+	Follower=iota
+	Candidate
+	Leader
+)
 
 //
 // as each Raft peer becomes aware that successive log entries are
@@ -55,6 +59,21 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
+	//persistent state
+	currentTerm int
+	votedFor int
+	log []entries
+	//volatile state
+	state int
+	commitIndex int
+	lastApplied int
+
+	//leader
+	nextIndex []int
+	matchIndex []int
+
+	//channel
+
 }
 
 // return currentTerm and whether this server
@@ -64,6 +83,12 @@ func (rf *Raft) GetState() (int, bool) {
 	var term int
 	var isleader bool
 	// Your code here (2A).
+	term = rf.currentTerm
+	if rf.state == Leader {
+		isleader = true
+	} else {
+		isleader = false
+	}
 	return term, isleader
 }
 
