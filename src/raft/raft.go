@@ -17,7 +17,10 @@ package raft
 //   in the same server.
 //
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 import "labrpc"
 
 // import "bytes"
@@ -141,6 +144,10 @@ func (rf *Raft) readPersist(data []byte) {
 //
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
+	Term int
+	CandidateId int
+	LastLogIndex int
+	LastLogTerm int
 }
 
 //
@@ -149,6 +156,23 @@ type RequestVoteArgs struct {
 //
 type RequestVoteReply struct {
 	// Your data here (2A).
+	Term int
+	VoteGranted bool
+}
+
+type AppendEntriesArgs struct {
+	Term int
+	LeaderId int
+	PrevLogIndex int
+	PrevLogTerm int
+	Entries []entries
+	LeaderCommit int
+}
+
+type AppendEntriesApply struct {
+	Term int
+	PrevIndex int
+	Success bool
 }
 
 //
@@ -156,6 +180,25 @@ type RequestVoteReply struct {
 //
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if args.Term > rf.currentTerm {
+		rf.currentTerm = args.Term
+		rf.state = Follower
+		rf.votedFor = -1
+	}
+
+	reply.Term = rf.currentTerm
+	reply.VoteGranted = false
+	if args.Term >= rf.currentTerm {
+		if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
+			reply.VoteGranted = true
+			rf.state = Follower
+			rf.voteFor = args.CandidateId
+			fmt.Println(rf.me, "voted for ", rf.votedFor)
+		} 
+	}
 }
 
 //
@@ -239,6 +282,16 @@ func (rf *Raft) Kill() {
 // Make() must return quickly, so it should start goroutines
 // for any long-running work.
 //
+
+func (rf *Raft)doStateChange {
+	for {
+		rf.mu.Lock()
+		st := rf.state
+		rf.mu.Unlock()
+	}
+}
+
+
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
@@ -247,6 +300,13 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
+	// 2A
+	rf.state = Follower
+	rf.currentTerm = 0
+	rf.votedFor = -1
+
+
+
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
