@@ -76,6 +76,9 @@ type Raft struct {
 	matchIndex []int
 
 	//channel
+	chanAppendEntries chan int
+	chanVoteGranted chan int
+	chanLeader chan int
 
 }
 
@@ -271,6 +274,11 @@ func (rf *Raft) Kill() {
 	// Your code here, if desired.
 }
 
+// candidate server request vote for itself
+func (rf *Raft) allRequestVote() {
+
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
@@ -283,11 +291,15 @@ func (rf *Raft) Kill() {
 // for any long-running work.
 //
 
+// 2A: do state change
 func (rf *Raft)doStateChange {
 	for {
 		rf.mu.Lock()
 		st := rf.state
 		rf.mu.Unlock()
+		switch st {
+
+		}
 	}
 }
 
@@ -305,7 +317,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.currentTerm = 0
 	rf.votedFor = -1
 
-
+	go rf.doStateChange()
 
 
 	// initialize from state persisted before a crash
