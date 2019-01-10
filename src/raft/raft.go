@@ -178,6 +178,12 @@ type AppendEntriesApply struct {
 	Success bool
 }
 
+func (rf *Raft) ClearChange() {
+	rf.chanAppendEntries = make(chan int, 1000)
+	rf.chanVoteGranted = make(chan int, 1000)
+}
+
+
 //
 // example RequestVote RPC handler.
 //
@@ -190,6 +196,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.currentTerm = args.Term
 		rf.state = Follower
 		rf.votedFor = -1
+		rf.ClearChange()
 	}
 
 	reply.Term = rf.currentTerm
@@ -274,7 +281,7 @@ func (rf *Raft) Kill() {
 	// Your code here, if desired.
 }
 
-// candidate server request vote for itself
+// 2A:candidate server request vote for itself
 func (rf *Raft) allRequestVote() {
 
 }
@@ -298,7 +305,52 @@ func (rf *Raft)doStateChange {
 		st := rf.state
 		rf.mu.Unlock()
 		switch st {
+		case Follower:
+			select {
+			case <- chanAppendEntries: //receive AppendEntries(empty means heartbeat) rpc
+				rf.mu.Lock()
+				rf.ClearChange()
+				rf.mu.Unlock()
+			case <- chanVoteGranted: //receive VoteRequest from candidate
+				rf.mu.Lock()
+				rf.ClearChange()
+				rf.mu.Unlock()
+			case <- time.After(time.Millisecond * time.Duration(750 + rand.Int31n(500))): //election timeout
+				rf.mu.Lock()
+				if len(chanAppendEntries) == 0 && len(chanVoteGranted) == 0{
+					rf.currentTerm += 1
+					rf.state = Candidate
+					rf.votedFor = rf.me
+				}
+				rf.ClearChange()
+				rf.mu.Unlock()
+			}
+		case Candidate:
+			go rf.allRequestVote() //send rpc to all servers
+			select {
+			case <- time.After(time.Millisecond * (time.Duration(750) + rand.Int31n(500)))
+				rf.mu.Lock()
+				if len(rf.chanAppendEntries) == 0 && len(rf.chanVoteGranted) == 0 {
+					rf.currentTerm += 1
+					rf.votedFor = rf.me
+				}
+				rf.ClearChange()
+				rf.mu.Unlock()
+			case <- chanLeader:	//receive more than major votes
+				rf.mu.Lock()
+				rf.state = Leader
+				rf.Println(rf.me, "become new leader, term is ", rf.currentTerm)
+				rf.mu.Unlock()
+			case <- chanAppendEntries:	//receive new leader's rpc and convert to Follower
+				rf.mu.Lock()
+				rf.state = Follower
+				rf.ClearChange()
+				rf.mu.Unlock()
+			}
 
+		case Leader:
+			go rf.allAppendEntries()
+			time.Sleep(time.Duration(50) * time.Millisecond)
 		}
 	}
 }
@@ -316,6 +368,11 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.state = Follower
 	rf.currentTerm = 0
 	rf.votedFor = -1
+
+	rf.chanAppendEntries = make(chan int, 1000)
+	rf.chanVoteGranted = make(chan int, 1000)
+	rf.chanLeader = make(chan int, 1000)
+
 
 	go rf.doStateChange()
 
