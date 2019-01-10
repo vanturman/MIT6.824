@@ -149,8 +149,8 @@ type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
 	Term int
 	CandidateId int
-	LastLogIndex int
-	LastLogTerm int
+	//LastLogIndex int
+	//LastLogTerm int
 }
 
 //
@@ -203,6 +203,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.VoteGranted = false
 	if args.Term >= rf.currentTerm {
 		if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
+			rf.chanVoteGranted <- 1
 			reply.VoteGranted = true
 			rf.state = Follower
 			rf.voteFor = args.CandidateId
@@ -283,7 +284,45 @@ func (rf *Raft) Kill() {
 
 // 2A:candidate server request vote for itself
 func (rf *Raft) allRequestVote() {
+	fmt.Println(rf.me, " becomes candidate, term is ", rf.currentTerm)
+	count := 1
+	args := &RequestVoteArgs{rf.currentTerm, rf.me}
+	for i := 0; i < len(rf.peers); i++ {
+		if rf.state == Candidate && i != rf.me { //only candidate can send requestVote
+			go func(i int) {
+				reply := RequestVoteReply{}
+				ok := rf.sendRequestVote(i, args, reply)
+				rf.mu.Lock()
+				defer rf.mu.Unlock()
+				if ok == true && rf.state == Candidate {// must verify rf's identity in case it became a follower
+					if reply.VoteGranted == true {	// receive positive vote from rf.peers[i]
+						count += 1
+						if (count == len(rf.peers) + 1) && (rf.state == Candidate){ //  must verify rf's identity in case it became a follower
+							rf.chanLeader <- 1
+						}
+					} 
+					else if reply.Term > rf.currentTerm { //candidate term is out of date
+						rf.state = Follower
+						rf.votedFor = -1
+						rf.currentTerm = reply.Term
+						rf.ClearChange()
+						return
+					}
+					if args.Term > rf.currentTerm { //candidate timeout and start a new election
+						return
+					}
 
+				}
+			}(i)
+		}
+	}
+}
+
+//
+func (rf *Raft) allAppendEntries() {
+    //rules for leaders to increase the commitIndex
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 }
 
 //
