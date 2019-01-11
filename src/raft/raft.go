@@ -20,6 +20,8 @@ package raft
 import (
 	"fmt"
 	"sync"
+	"time"
+	"math/rand"
 )
 import "labrpc"
 
@@ -65,15 +67,15 @@ type Raft struct {
 	//persistent state
 	currentTerm int
 	votedFor int
-	log []entries
+	//log []entries
 	//volatile state
 	state int
-	commitIndex int
-	lastApplied int
+	//commitIndex int
+	//lastApplied int
 
 	//leader
-	nextIndex []int
-	matchIndex []int
+	//nextIndex []int
+	//matchIndex []int
 
 	//channel
 	chanAppendEntries chan int
@@ -206,7 +208,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			rf.chanVoteGranted <- 1
 			reply.VoteGranted = true
 			rf.state = Follower
-			rf.voteFor = args.CandidateId
+			rf.votedFor = args.CandidateId
 			fmt.Println(rf.me, "voted for ", rf.votedFor)
 		} 
 	}
@@ -220,9 +222,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.votedFor = -1
 		rf.state = Follower
 		rf.ClearChange()
-		chanAppendEntries <- 1
+		rf.chanAppendEntries <- 1
 	}
 	reply.Term = rf.currentTerm
+	fmt.Println(rf.state, " receive heartbeat from ", args.LeaderId)
 }
 
 
@@ -304,18 +307,19 @@ func (rf *Raft) allRequestVote() {
 	for i := 0; i < len(rf.peers); i++ {
 		if rf.state == Candidate && i != rf.me { //only candidate can send requestVote
 			go func(i int) {
-				reply := RequestVoteReply{}
+				reply := &RequestVoteReply{}
 				ok := rf.sendRequestVote(i, args, reply)
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				if ok == true && rf.state == Candidate {// must verify rf's identity in case it became a follower
 					if reply.VoteGranted == true {	// receive positive vote from rf.peers[i]
 						count += 1
-						if (count == len(rf.peers) + 1) && (rf.state == Candidate){ //  must verify rf's identity in case it became a follower
+						fmt.Println("candidate: ", rf.me, "count: ", count, "level: ", len(rf.peers)/2 + 1)
+						if (count == len(rf.peers)/2 + 1) && (rf.state == Candidate){ //  must verify rf's identity in case it became a follower
 							rf.chanLeader <- 1
+							fmt.Println(rf.me, "become a leader")
 						}
-					} 
-					else if reply.Term > rf.currentTerm { //candidate term is out of date
+					} else if reply.Term > rf.currentTerm { //candidate term is out of date
 						rf.state = Follower
 						rf.votedFor = -1
 						rf.currentTerm = reply.Term
@@ -339,14 +343,14 @@ func (rf *Raft) allAppendEntries() {
 	defer rf.mu.Unlock()
 	for i := 0; i < len(rf.peers); i++ {
 		if rf.state == Leader && i != rf.me {
-			args = &AppendEntriesArgs{rf.currentTerm, rf.me}
+			args := &AppendEntriesArgs{rf.currentTerm, rf.me}
 			go func(args *AppendEntriesArgs, i int) {
-				reply = &AppendEntriesApply{}
-				ok := rf.peers[i].Call("Raft.AppendEntries", args, apply)
+				reply := &AppendEntriesReply{}
+				ok := rf.peers[i].Call("Raft.AppendEntries", args, reply)
 				rf.mu.Lock()
 				rf.mu.Unlock()
-				if ok == true && rf.state== Leader {
-					if args.Term ! =rf.currentTerm {
+				if ok == true && rf.state == Leader {
+					if args.Term != rf.currentTerm {
 						return
 					}
 					if reply.Term > rf.currentTerm {
@@ -376,7 +380,7 @@ func (rf *Raft) allAppendEntries() {
 //
 
 // 2A: do state change
-func (rf *Raft)doStateChange {
+func (rf *Raft)doStateChange() {
 	for {
 		rf.mu.Lock()
 		st := rf.state
@@ -384,17 +388,17 @@ func (rf *Raft)doStateChange {
 		switch st {
 		case Follower:
 			select {
-			case <- chanAppendEntries: //receive AppendEntries(empty means heartbeat) rpc
+			case <- rf.chanAppendEntries: //receive AppendEntries(empty means heartbeat) rpc
 				rf.mu.Lock()
 				rf.ClearChange()
 				rf.mu.Unlock()
-			case <- chanVoteGranted: //receive VoteRequest from candidate
+			case <- rf.chanVoteGranted: //receive VoteRequest from candidate
 				rf.mu.Lock()
 				rf.ClearChange()
 				rf.mu.Unlock()
 			case <- time.After(time.Millisecond * time.Duration(750 + rand.Int31n(500))): //election timeout
 				rf.mu.Lock()
-				if len(chanAppendEntries) == 0 && len(chanVoteGranted) == 0{
+				if len(rf.chanAppendEntries) == 0 && len(rf.chanVoteGranted) == 0 {
 					rf.currentTerm += 1
 					rf.state = Candidate
 					rf.votedFor = rf.me
@@ -405,7 +409,7 @@ func (rf *Raft)doStateChange {
 		case Candidate:
 			go rf.allRequestVote() //send rpc to all servers
 			select {
-			case <- time.After(time.Millisecond * (time.Duration(750) + rand.Int31n(500)))
+			case <- time.After(time.Millisecond * time.Duration(750 + rand.Int31n(500))):
 				rf.mu.Lock()
 				if len(rf.chanAppendEntries) == 0 && len(rf.chanVoteGranted) == 0 {
 					rf.currentTerm += 1
@@ -413,12 +417,12 @@ func (rf *Raft)doStateChange {
 				}
 				rf.ClearChange()
 				rf.mu.Unlock()
-			case <- chanLeader:	//receive more than major votes
+			case <- rf.chanLeader:	//receive more than major votes
 				rf.mu.Lock()
 				rf.state = Leader
-				rf.Println(rf.me, "become new leader, term is ", rf.currentTerm)
+				fmt.Println(rf.me, "become new leader, term is ", rf.currentTerm)
 				rf.mu.Unlock()
-			case <- chanAppendEntries:	//receive new leader's rpc and convert to Follower
+			case <- rf.chanAppendEntries:	//receive new leader's rpc and convert to Follower
 				rf.mu.Lock()
 				rf.state = Follower
 				rf.ClearChange()
