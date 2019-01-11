@@ -166,16 +166,16 @@ type RequestVoteReply struct {
 type AppendEntriesArgs struct {
 	Term int
 	LeaderId int
-	PrevLogIndex int
-	PrevLogTerm int
-	Entries []entries
-	LeaderCommit int
+	//PrevLogIndex int
+	//PrevLogTerm int
+	//Entries []entries
+	//LeaderCommit int
 }
 
-type AppendEntriesApply struct {
+type AppendEntriesReply struct {
 	Term int
-	PrevIndex int
-	Success bool
+	//PrevIndex int
+	//Success bool
 }
 
 func (rf *Raft) ClearChange() {
@@ -211,6 +211,20 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		} 
 	}
 }
+
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if rf.currentTerm < args.Term {
+		rf.currentTerm = args.Term
+		rf.votedFor = -1
+		rf.state = Follower
+		rf.ClearChange()
+		chanAppendEntries <- 1
+	}
+	reply.Term = rf.currentTerm
+}
+
 
 //
 // example code to send a RequestVote RPC to a server.
@@ -318,11 +332,35 @@ func (rf *Raft) allRequestVote() {
 	}
 }
 
-//
+// 2A & 2B: leader send appendEntries or heartbeats rpc to servers 
 func (rf *Raft) allAppendEntries() {
     //rules for leaders to increase the commitIndex
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	for i := 0; i < len(rf.peers); i++ {
+		if rf.state == Leader && i != rf.me {
+			args = &AppendEntriesArgs{rf.currentTerm, rf.me}
+			go func(args *AppendEntriesArgs, i int) {
+				reply = &AppendEntriesApply{}
+				ok := rf.peers[i].Call("Raft.AppendEntries", args, apply)
+				rf.mu.Lock()
+				rf.mu.Unlock()
+				if ok == true && rf.state== Leader {
+					if args.Term ! =rf.currentTerm {
+						return
+					}
+					if reply.Term > rf.currentTerm {
+						rf.state = Follower
+						rf.currentTerm = reply.Term
+						rf.votedFor = -1
+						rf.ClearChange()
+						return
+					}
+
+				}
+			}(args, i)
+		}
+	}
 }
 
 //
