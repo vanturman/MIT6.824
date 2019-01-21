@@ -51,6 +51,12 @@ type ApplyMsg struct {
 	CommandIndex int
 }
 
+type entries struct {
+	Command interface{}
+	Term int
+	Index int
+}
+
 //
 // A Go object implementing a single Raft peer.
 //
@@ -67,20 +73,21 @@ type Raft struct {
 	//persistent state
 	currentTerm int
 	votedFor int
-	//log []entries
+	log []entries
 	//volatile state
 	state int
-	//commitIndex int
-	//lastApplied int
+	commitIndex int
+	lastApplied int
 
 	//leader
-	//nextIndex []int
-	//matchIndex []int
+	nextIndex []int
+	matchIndex []int
 
 	//channel
 	chanAppendEntries chan int
 	chanVoteGranted chan int
 	chanLeader chan int
+	
 
 }
 
@@ -205,11 +212,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.VoteGranted = false
 	if args.Term >= rf.currentTerm {
 		if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
-			rf.chanVoteGranted <- 1
-			reply.VoteGranted = true
-			rf.state = Follower
-			rf.votedFor = args.CandidateId
-			fmt.Println(rf.me, "voted for ", rf.votedFor)
+			if args.LastLogTerm > rf.log[rf.GetLen()].Term || (args.LastLogTerm == rf.log[rf.GetLen()].Term && args.LastLogINdex >= rf.log[rf.GetLen()].Index)
+			{
+				rf.chanVoteGranted <- 1
+				reply.VoteGranted = true
+				rf.state = Follower
+				rf.votedFor = args.CandidateId
+				fmt.Println(rf.me, "voted for ", rf.votedFor)
+			}
+
 		} 
 	}
 }
@@ -224,8 +235,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.ClearChange()
 		rf.chanAppendEntries <- 1
 	}
+	rf.chanAppendEntries <- 1
 	reply.Term = rf.currentTerm
-	fmt.Println(rf.state, " receive heartbeat from ", args.LeaderId)
+	//fmt.Println(rf.me, " receive heartbeat from ", args.LeaderId, " Self Term: ", rf.currentTerm, " Leader Term: ", args.Term)
 }
 
 
