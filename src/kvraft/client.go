@@ -3,11 +3,16 @@ package raftkv
 import "labrpc"
 import "crypto/rand"
 import "math/big"
+import "sync"
 
 
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	mu sync.Mutex
+	currentLeader int
+	id int64
+	seq int
 }
 
 func nrand() int64 {
@@ -21,6 +26,9 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
+	ck.currentLeader = 0
+	ck.id = nrand()
+	ck.seq = 1
 	return ck
 }
 
@@ -37,8 +45,19 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-
 	// You will have to modify this function.
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+	args := GetArgs{key, ck.id, ck.seq}
+	ck.seq++
+
+	for i := ck.currentLeader; true; i = (i + 1) % len(ck.server) {
+		reply := GetReply{}
+		ok := ck.server[i].Call("KVServer.Get")
+
+	}
+
+
 	return ""
 }
 
