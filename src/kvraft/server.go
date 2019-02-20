@@ -44,7 +44,7 @@ type KVServer struct {
 	// Your definitions here.
 	kvdatabase map[string]string	// kv database
 	detectDup map[int64]int		// detect duplicate
-	chanresult map[int]chan Op	// to receive op data
+	chanresult map[int]chan Op	// wait for op data
 }
 
 // wait raft syschronized result
@@ -84,7 +84,6 @@ func (kv *KVServer) StartCommand(oop Op) Err {
 		fmt.Println("Timeout, index is: ", index)
 		return ErrTimeout
 	}
-
 }
 
 
