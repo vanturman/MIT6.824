@@ -85,9 +85,9 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 
 	for i := ck.currentLeader; true; i = (i + 1) % (len(ck.servers)) {
 		reply := PutAppendReply{}
-		ok := ck.servers[i].Call{"KVServer.PutAppend", &args, &reply}
-		if ok && reply.WrongLeader == fasle {
-			ck.currentLeader = id
+		ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
+		if ok && reply.WrongLeader == false {
+			ck.currentLeader = i
 			break
 		}
 	}

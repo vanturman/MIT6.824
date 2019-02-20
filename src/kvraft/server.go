@@ -6,6 +6,9 @@ import (
 	"log"
 	"raft"
 	"sync"
+	"time"
+	"fmt"
+	//"bytes"
 )
 
 const Debug = 0
@@ -62,15 +65,15 @@ func (kv *KVServer) StartCommand(oop Op) Err {
 	}
 	// use chanresult and wait raft syschronized result
 	ch := make(chan Op)
-	chanresult[index] = ch
+	kv.chanresult[index] = ch
 	defer func() {
 		delete(kv.chanresult, index)
-	}
+	} ()
 
 	// waiting for operation result
 	// success or wrongleader or timeout
 	select {
-	case res := ch:
+	case res := <-ch:
 		if res == oop {
 			fmt.Println("Index: ", index, " operate successfully. Reply to client.")
 			return OK
@@ -87,7 +90,7 @@ func (kv *KVServer) StartCommand(oop Op) Err {
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
-	op := Op{"Get", args.Key, "", args.CliendId, args.Seq}
+	op := Op{"Get", args.Key, "", args.ClientId, args.Seq}
 	reply.Err = kv.StartCommand(op)
 	if reply.Err != OK {
 		reply.WrongLeader = true
@@ -97,17 +100,18 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
-	reply.Value, ok := kv.kvdatabase[args.Key]
+	value, ok := kv.kvdatabase[args.Key]
 	if !ok {
-		reply.Value = ""
+		value = ""
 		reply.Err = ErrNoKey
 	}
+	reply.Value = value
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
-	op := Op{args.Op, args,Key, args.Value, args.ClientId, args.Seq}
-	reply.Err = StartCommand(op)
+	op := Op{args.Op, args.Key, args.Value, args.ClientId, args.Seq}
+	reply.Err = kv.StartCommand(op)
 	if reply.Err != OK {
 		reply.WrongLeader = true
 	} else {
@@ -139,7 +143,7 @@ func (kv *KVServer) Apply(oop Op) {
 	defer kv.mu.Unlock()
 	// apply operation
 	// only "Put" and "Append" can be applied
-	if CheckDup(oop.ClientId, oop.Seq) {
+	if kv.CheckDup(oop.ClientId, oop.Seq) {
 		switch oop.Opname {
 		case "Put":
 			kv.kvdatabase[oop.Key] = oop.Value
@@ -150,7 +154,7 @@ func (kv *KVServer) Apply(oop Op) {
 				kv.kvdatabase[oop.Key] = oop.Value
 			}
 		}
-		kv.detectDup[oop.CliendId] = oop.Seq
+		kv.detectDup[oop.ClientId] = oop.Seq
 	}
 }
 
@@ -177,7 +181,7 @@ func (kv *KVServer) doApplyOp() {
 			index := appliedMsg.CommandIndex
 			if oop, ok := appliedMsg.Command.(Op); ok {
 				kv.Apply(oop)
-				kv.Reply(oop)
+				kv.Reply(oop, index)
 			}
 		}
 
@@ -214,9 +218,9 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
-	rf.kvdatabase = make(map[string]string)
-	rf.detectDup = make(map[int64]int)
-	rf.chanresult = make(map[int]chan Op)
+	kv.kvdatabase = make(map[string]string)
+	kv.detectDup = make(map[int64]int)
+	kv.chanresult = make(map[int]chan Op)
 
 	go kv.doApplyOp()
 

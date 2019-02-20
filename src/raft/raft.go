@@ -272,7 +272,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 				reply.VoteGranted = true
 				rf.state = Follower
 				rf.votedFor = args.CandidateId
-				fmt.Println(rf.me, "voted for ", rf.votedFor)
+				//fmt.Println(rf.me, "voted for ", rf.votedFor)
 			}
 
 		} 
@@ -457,7 +457,7 @@ func (rf *Raft) allRequestVote() {
 				if ok == true && rf.state == Candidate {// must verify rf's identity in case it became a follower
 					if reply.VoteGranted == true {	// receive positive vote from rf.peers[i]
 						count += 1
-						fmt.Println("candidate: ", rf.me, "count: ", count, "level: ", len(rf.peers)/2 + 1)
+						// fmt.Println("candidate: ", rf.me, "count: ", count, "level: ", len(rf.peers)/2 + 1)
 						if (count == len(rf.peers)/2 + 1) && (rf.state == Candidate){ //  must verify rf's identity in case it became a follower
 							rf.chanLeader <- 1
 							fmt.Println(rf.me, "become a leader")
