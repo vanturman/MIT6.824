@@ -51,14 +51,19 @@ func (ck *Clerk) Get(key string) string {
 	args := GetArgs{key, ck.id, ck.seq}
 	ck.seq++
 
-	for i := ck.currentLeader; true; i = (i + 1) % len(ck.server) {
+	ret := ""
+	for i := ck.currentLeader; true; i = (i + 1) % len(ck.servers) {
 		reply := GetReply{}
-		ok := ck.server[i].Call("KVServer.Get")
-
+		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
+		if ok && reply.WrongLeader == false {
+			ck.currentLeader = i
+			if reply.Err == OK {
+				ret = reply.Value
+			}
+			break
+		}
 	}
-
-
-	return ""
+	return ret
 }
 
 //
@@ -73,6 +78,20 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+	args := PutAppendArgs{key, value, op, ck.id, ck.seq}
+	ck.seq++
+
+	for i := ck.currentLeader; true; i = (i + 1) % (len(ck.servers)) {
+		reply := PutAppendReply{}
+		ok := ck.servers[i].Call{"KVServer.PutAppend", &args, &reply}
+		if ok && reply.WrongLeader == fasle {
+			ck.currentLeader = id
+			break
+		}
+	}
+	return
 }
 
 func (ck *Clerk) Put(key string, value string) {

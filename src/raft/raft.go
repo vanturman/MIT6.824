@@ -724,7 +724,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.chanApplyMsg = applyCh
 	rf.chanCommit = make(chan int, 1000)
 
-	// initialize from state persisted before a crash
+	// 2C: initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
     // initialize from state persisted before a crash
